@@ -194,6 +194,22 @@ async def run_once() -> int:
 PERIODIC: list[Callable[[], Awaitable[None]]] = []
 
 
+_usage_wait_until: datetime | None = None
+
+
+async def _run_timer(job) -> None:
+    global _usage_wait_until
+    if _usage_wait_until and now_utc() < _usage_wait_until:
+        return
+    try:
+        await job()
+    except UsageLimit as exc:
+        _usage_wait_until = now_utc() + timedelta(seconds=exc.wait_seconds())
+        log.warning("Usage limit in a timer job; waiting until %s", exc.reset_text())
+    except Exception:
+        log.exception("Timer job failed: %s", getattr(job, "__name__", job))
+
+
 async def run_forever(every_seconds: int) -> None:
     log.info("Job runner started (checks every %ss)", every_seconds)
     while True:
@@ -207,12 +223,12 @@ async def run_forever(every_seconds: int) -> None:
                     _running[slug] = task
                     task.add_done_callback(lambda _t, s=slug: _running.pop(s, None))
                 for job in PERIODIC:
-                    try:
-                        await job()
-                    except UsageLimit as exc:
-                        log.warning("Usage limit in periodic job; waiting until %s", exc.reset_text())
-                    except Exception:
-                        log.exception("Periodic job failed: %s", getattr(job, "__name__", job))
+                    name = "timer:" + getattr(job, "__module__", "") + "." + getattr(job, "__name__", str(job))
+                    if name in _running:
+                        continue   # still busy (maybe waiting for your answer)
+                    task = asyncio.create_task(_run_timer(job))
+                    _running[name] = task
+                    task.add_done_callback(lambda _t, n=name: _running.pop(n, None))
         except Exception:
             log.exception("Job runner error")
         await asyncio.sleep(every_seconds)

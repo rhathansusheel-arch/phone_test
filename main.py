@@ -1,31 +1,28 @@
-"""Start the KDP Agent: the Telegram bot and the job runner.
+"""Start the KDP Agent: the Telegram bot, the job runner and the timers.
 
 Run:   .venv\\Scripts\\python main.py     (or double-click start.bat)
 Stop:  press Ctrl+C in this window
 """
 
-import logging
-import sys
-
-from kdp_agent import settings, state
+from kdp_agent import jobs, logs, settings, state
+from kdp_agent import pipeline, kdp_upload  # noqa: F401  (these register the stage workers)
+from kdp_agent import after_launch, niches
 from kdp_agent.telegram_bot import build_app
 
 
-def setup_logging() -> None:
-    settings.LOGS.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout),
-                  logging.FileHandler(settings.LOGS / "agent.log", encoding="utf-8")])
-    logging.getLogger("httpx").setLevel(logging.WARNING)  # hide noisy web-request lines
+async def inbox_check() -> None:
+    """Ask about new PDFs in the inbox (at most once per new file)."""
+    seen = settings.read_json(settings.DATA / "inbox_seen.json", [])
+    if any(p.name not in seen for p in settings.INBOX.glob("*.pdf")):
+        await pipeline.intake_inbox()
 
 
 def main() -> None:
-    setup_logging()
+    logs.setup()
     settings.ensure_folders()
     token, chat_id = settings.load_secrets()
     state.load()
+    jobs.PERIODIC[:] = [inbox_check, after_launch.periodic, niches.periodic]
     print("KDP Agent is starting. Leave this window open. Press Ctrl+C to stop.")
     build_app(token, chat_id).run_polling()
 

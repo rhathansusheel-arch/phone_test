@@ -136,11 +136,22 @@ def handle_text(text: str) -> bool:
 HELP = """KDP Agent commands:
 /status - what I'm doing now, slots left this week, next reset
 /queue - books in progress and their stage
-/pause - stop all work
-/resume - start work again
-/level - show the autonomy level (/level 1 or /level 2 to change)
-/taste - what I've learned about your taste
-/stopads - pause all ads
+/books - every book, its stage and Amazon link
+/pause - stop all work    /resume - start again
+/level - autonomy level (/level 1 or /level 2 to change)
+/taste - what I've learned about your taste and what sells
+/inbox - look for new PDFs in the inbox now
+/research - find new book ideas now
+/report - this week's sales report now
+/adsplan - what the ads step would do (creates nothing)
+/stopads - pause all ads    /startads - allow ads again
+/hold <book> - put a book on hold    /unhold <book> - continue it
+/login - open the KDP window so you can log in by hand
+/checkspecs - re-read KDP's rules (sizes, prices) from kdp.amazon.com
+/testdraft <book> - fill the paperback on KDP as a draft only (test)
+/sample <theme> - draw a 6-page sample (test, never uploaded)
+/sales - read KDP Reports now and show the report
+/logs - the last 30 lines of today's log
 /testask - send a test approval question
 /help - this list"""
 
@@ -193,12 +204,161 @@ async def cmd_level(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_taste(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Nothing learned yet - this arrives in Phase 5.")
+    from . import sales, taste
+    await update.message.reply_text(taste.summary() + "\n\n" + sales.what_sells())
 
 
 async def cmd_stopads(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import ads
     decisions.log({"type": "command", "command": "stopads"})
-    await update.message.reply_text("No ads are running. (Ads arrive in Phase 6.)")
+    await update.message.reply_text("⏸ Stopping all ads...")
+    await update.message.reply_text(await ads.stop_all())
+
+
+async def cmd_startads(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    state.update(ads_stopped=False)
+    decisions.log({"type": "command", "command": "startads"})
+    on = settings.load_config()["ads"]["enabled"]
+    await update.message.reply_text("▶️ Ads allowed again (only under the ₹2,000-profit rule, and I ask before each campaign)."
+                                    + ("" if on else "\nNote: ads are still switched off in config.yaml (ads: enabled: false)."))
+
+
+async def cmd_adsplan(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import ads
+    await update.message.reply_text(ads.dry_run_text())
+
+
+async def cmd_report(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import sales
+    await update.message.reply_text(sales.weekly_report())
+
+
+async def cmd_books(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    books = jobs.all_books()
+    if not books:
+        await update.message.reply_text("No books yet. Put PDFs in the inbox and send /inbox.")
+        return
+    lines = []
+    for b in books:
+        line = f"• {b['title']} [{b['slug']}] - {b['stage']}{' (on hold)' if b.get('on_hold') else ''}"
+        if b.get("amazon_links"):
+            line += "\n  " + b["amazon_links"][0]
+        lines.append(line)
+    await update.message.reply_text("\n".join(lines)[:4000])
+
+
+def _find_book(arg: str | None) -> dict | None:
+    if not arg:
+        return None
+    arg = arg.lower()
+    for b in jobs.all_books():
+        if b["slug"] == arg or arg in b["slug"] or arg in b["title"].lower():
+            return b
+    return None
+
+
+async def cmd_hold(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    b = _find_book(" ".join(ctx.args))
+    if not b:
+        await update.message.reply_text("Which book? Example: /hold ocean  (see /books)")
+        return
+    jobs.update_book(b["slug"], on_hold=True)
+    await update.message.reply_text(f"✋ '{b['title']}' is on hold.")
+
+
+async def cmd_unhold(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    b = _find_book(" ".join(ctx.args))
+    if not b:
+        await update.message.reply_text("Which book? Example: /unhold ocean  (see /books)")
+        return
+    jobs.update_book(b["slug"], on_hold=False, error=None, wait_until=None)
+    await update.message.reply_text(f"▶️ '{b['title']}' continues from stage '{b['stage']}'.")
+
+
+async def cmd_inbox(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import pipeline
+    await update.message.reply_text("📥 Looking in the inbox...")
+    made = await pipeline.intake_inbox()
+    await update.message.reply_text(f"Added {len(made)} book(s)." if made else "No new PDFs in the inbox.")
+
+
+async def cmd_research(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import niches
+    await update.message.reply_text("🔎 Researching Amazon (slowly, like a person). This takes a while...")
+    rows = await niches.research_round(force=True)
+    if not rows:
+        await update.message.reply_text("No research results (daily research budget used, or Amazon blocked me).")
+
+
+async def cmd_checkspecs(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import specs
+    await update.message.reply_text("📏 Reading KDP's help pages. This takes a few minutes...")
+    found, diffs = await specs.check_from_kdp()
+    text = "My numbers match KDP." if not diffs else "Differences:\n" + "\n".join(diffs[:30])
+    a = await ask_me(f"📏 {text}\nSave KDP's numbers?", buttons=["Save", "Don't save"], about="checkspecs")
+    if a and a["choice"] == "Save":
+        specs.save_checked(found)
+        await notify("✅ Saved. KDP numbers confirmed.")
+
+
+async def cmd_login(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from .browser import profile_session
+    from .kdp_upload import kdp_url
+    await update.message.reply_text("🔐 Opening KDP in a browser window on your PC...")
+    async with profile_session("kdp") as bctx:
+        page = bctx.pages[0] if bctx.pages else await bctx.new_page()
+        await page.goto(kdp_url("bookshelf"))
+        a = await ask_me("Log in to KDP by hand in that window (including any code Amazon sends). "
+                         "I never see or save your password. Tap Done when you see your Bookshelf.",
+                         buttons=["Done"], about="login")
+    await notify("✅ Thanks - I'll reuse that login." if a else "Login window closed.")
+
+
+async def cmd_testdraft(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import kdp_upload
+    b = _find_book(" ".join(ctx.args))
+    if not b or b["stage"] != "listed":
+        await update.message.reply_text("Send /testdraft <book> for a book at stage 'listed' (see /books).")
+        return
+    await kdp_upload.ensure_ready()
+    r = await kdp_upload.fill_format(b["slug"], "paperback")
+    if r.get("queued"):
+        await update.message.reply_text(r["why"])
+        return
+    await send_photos(r["screens"][:10])
+    await update.message.reply_text(f"📋 Paperback saved as a DRAFT only (not published). Price ${r['price']:.2f}, "
+                                    f"KDP royalty shown: {r['kdp_royalty']}. Warnings: {r['warnings'] or 'none'}")
+
+
+async def cmd_sample(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Phase 4 test: draw a 6-page sample and send the contact sheet (nothing is uploaded)."""
+    from . import artist, pipeline
+    theme = " ".join(ctx.args) or "Farm animals"
+    slug = jobs.make_slug(f"sample {theme}")
+    if not jobs.load_book(slug):
+        jobs.create_book(f"Sample: {theme}", slug=slug, on_hold=True)   # on hold: never goes further
+        pipeline.save_plan(slug, {"source": "sample", "theme": theme, "audience": "toddlers and preschool kids",
+                                  "ages": [2, 5], "seed": f"{theme} coloring book", "picture_count": 6,
+                                  "trim": "8.5x11", "formats": []})
+    await update.message.reply_text(f"🎨 Drawing a 6-page sample of '{theme}' (about 1 minute per page)...")
+    await artist.plan_pages(slug)
+    artist.PAGES_PER_RUN = 6
+    while not await artist.draw_and_review(slug):
+        if not any(p["status"] == "todo" for p in artist.load_pages(slug)["pages"]):
+            continue
+    await notify("✅ Sample approved. (It's only a sample, so it stays on hold and is never uploaded.)")
+
+
+async def cmd_sales(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import sales
+    await update.message.reply_text("📊 Reading KDP Reports...")
+    n = await sales.read_kdp_reports()
+    await update.message.reply_text(f"Saved {n} sales rows.\n\n" + sales.weekly_report())
+
+
+async def cmd_logs(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from .logs import last_lines
+    await update.message.reply_text(last_lines(30)[-4000:] or "No log lines yet.")
 
 
 async def cmd_testask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -228,6 +388,17 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("I'm not waiting for an answer right now. /help shows the commands.")
 
 
+def _safe(fn):
+    """Run a long command; if it fails, tell you instead of going quiet."""
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            await fn(update, ctx)
+        except Exception as exc:
+            log.exception("Command failed")
+            await notify(f"⚠️ That didn't work: {exc}")
+    return wrapper
+
+
 # ---------------------------------------------------------------- start-up
 
 async def notify(text: str) -> None:
@@ -247,10 +418,11 @@ def build_app(token: str, chat_id: int) -> Application:
         _bot = app.bot
         jobs.notify = notify
         await app.bot.set_my_commands([BotCommand(c, d) for c, d in [
-            ("status", "What I'm doing + slots left"), ("queue", "Books in progress"),
-            ("pause", "Stop all work"), ("resume", "Start work again"),
-            ("level", "Autonomy level"), ("taste", "What I've learned"),
-            ("stopads", "Pause all ads"), ("testask", "Test approval"), ("help", "All commands")]])
+            ("status", "What I'm doing + slots left"), ("queue", "Books in progress"), ("books", "All books"),
+            ("pause", "Stop all work"), ("resume", "Start work again"), ("level", "Autonomy level"),
+            ("taste", "What I've learned"), ("inbox", "Check the inbox"), ("research", "Find book ideas"),
+            ("report", "Weekly report"), ("adsplan", "Ads dry run"), ("stopads", "Pause all ads"),
+            ("login", "Log in to KDP by hand"), ("logs", "Last 30 log lines"), ("help", "All commands")]])
         runner["task"] = asyncio.create_task(jobs.run_forever(every))
         await notify("🟢 KDP Agent started. /help shows what I can do.")
 
@@ -262,10 +434,15 @@ def build_app(token: str, chat_id: int) -> Application:
     app = Application.builder().token(token).post_init(on_start).post_shutdown(on_stop).build()
     for name, fn in [("help", cmd_help), ("start", cmd_help), ("status", cmd_status),
                      ("queue", cmd_queue), ("pause", cmd_pause), ("resume", cmd_resume),
-                     ("level", cmd_level), ("taste", cmd_taste), ("stopads", cmd_stopads)]:
+                     ("level", cmd_level), ("taste", cmd_taste), ("books", cmd_books), ("hold", cmd_hold),
+                     ("unhold", cmd_unhold), ("adsplan", cmd_adsplan), ("report", cmd_report),
+                     ("startads", cmd_startads), ("logs", cmd_logs)]:
         app.add_handler(CommandHandler(name, fn, filters=me_only))
-    # /testask waits for your tap, so it must not block the bot from hearing that tap.
-    app.add_handler(CommandHandler("testask", cmd_testask, filters=me_only, block=False))
+    # These wait for your tap or take a while, so they must not block the bot from hearing you.
+    for name, fn in [("testask", cmd_testask), ("inbox", cmd_inbox), ("research", cmd_research),
+                     ("checkspecs", cmd_checkspecs), ("login", cmd_login), ("testdraft", cmd_testdraft),
+                     ("stopads", cmd_stopads), ("sample", cmd_sample), ("sales", cmd_sales)]:
+        app.add_handler(CommandHandler(name, _safe(fn), filters=me_only, block=False))
     app.add_handler(CallbackQueryHandler(on_button))
     app.add_handler(MessageHandler(me_only & filters.TEXT & ~filters.COMMAND, on_text))
     return app

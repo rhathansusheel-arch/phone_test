@@ -25,16 +25,20 @@ def record(kind: str, decision: str, about: str, reason: str | None = None, **de
     data["events"].append({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                            "kind": kind, "decision": decision, "about": about,
                            "reason": reason, **details})
-    words = [w for w in about.lower().replace("&", " ").split() if len(w) > 2]
-    bucket = "liked_words" if decision == "approved" else "disliked_words" if decision == "rejected" else None
+    import re
+    stop = {"coloring", "colouring", "book", "for", "and", "the", "kids", "ages", "with", "adults"}
+    words = [w for w in re.findall(r"[a-z]+", about.lower()) if len(w) > 2 and w not in stop]
+    bucket = None
+    if kind in ("niche", "book"):   # only real taste decisions teach me what you like
+        bucket = "liked_words" if decision == "approved" else "disliked_words" if decision == "rejected" else None
     if bucket:
         for w in words:
             data[bucket][w] = data[bucket].get(w, 0) + 1
     if kind == "niche":
         if decision == "approved" and not details.get("changed"):
             data["approval_streak"] = data.get("approval_streak", 0) + 1
-        else:
-            data["approval_streak"] = 0
+        elif decision in ("rejected", "changed") or details.get("changed"):
+            data["approval_streak"] = 0      # "skipped" (the ideas you didn't pick) doesn't break the streak
     save(data)
     return data
 
@@ -42,8 +46,9 @@ def record(kind: str, decision: str, about: str, reason: str | None = None, **de
 def word_score(text: str) -> float:
     """How well a niche matches your taste: + for liked words, - for disliked ones."""
     data = load()
+    import re
     score = 0.0
-    for w in text.lower().split():
+    for w in re.findall(r"[a-z]+", text.lower()):
         score += data["liked_words"].get(w, 0) * 1.0
         score -= data["disliked_words"].get(w, 0) * 1.5
     return score

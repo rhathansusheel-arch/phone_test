@@ -15,3 +15,6 @@ data/*
 !data/.gitkeep
 logs/*
 !logs/.gitkeep
+# Daily backups and test leftovers stay on your PC
+backups/
+stop.flag

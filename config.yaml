@@ -94,7 +94,7 @@ browser:
   min_pause_seconds: 2
   max_pause_seconds: 5
   show_kdp_window: true        # show the KDP browser window, so you can log in when asked
-  research_headless: true      # true = Amazon research runs without a visible window
+  research_headless: false     # false = Amazon research uses a normal visible browser window (Amazon often blocks hidden ones)
   kdp_base_url: "https://kdp.amazon.com/en_US"
   amazon_base_url: "https://www.amazon.com"
 

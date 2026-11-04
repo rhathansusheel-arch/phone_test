@@ -85,8 +85,24 @@ The user may upload Christmas by hand first (seasonal timing) — **ask them**.
 
 ## Build progress
 - [x] Phase 0 — CLAUDE.md written (2026-11-04)
-- [x] Phase 1 — code written and tested in the cloud with a pretend Telegram (2026-11-04). Waiting for user to run it on the PC (README steps 1-5) and confirm /testask works.
-- [ ] Phase 2 — not started
-- Setup: user chose Option B — code is written in the cloud repo (rhathansusheel-arch/phone_test, branch ccr-2d037c59-qktmwl); user pulls it into C:\KDPAgent with `git pull` and runs it there.
-- Code map: main.py (start), kdp_agent/telegram_bot.py (commands + ask_me), kdp_agent/jobs.py (stages + runner, add workers with @stage_worker), kdp_agent/limits.py (weekly slot guard), kdp_agent/state.py, kdp_agent/decisions.py, tests/ (run: python -m pytest).
+- [x] Phases 1-7 — all code written and tested in the cloud (2026-11-04): 27 automatic tests pass, incl. the 7 safety tests.
+  Tested for real with headless Claude: listing writer, picture-subject reading, 6-page SVG sample (all pages passed first try).
+  Tested against a pretend KDP website (tests/fake_kdp.py) and pretend Telegram: drafts, AI disclosure, publish-after-approval,
+  login/CAPTCHA stop, live tracking, all bot commands.
+- [ ] ON THE USER'S PC (not possible from the cloud — Amazon/KDP were blocked there):
+  1. README steps 1.1-1.7 (Python/Git, git pull, setup.bat, bot token + chat ID in .env, start.bat, /login, /inbox)
+  2. /checkspecs — confirm KDP's sizes/prices (config numbers came from guides, not kdp.amazon.com; hardcover cover
+     wrap/hinge are UNCONFIRMED and get checked against KDP's cover calculator before any hardcover upload)
+  3. Real-world first runs to watch closely: Amazon research parsing (research.py), KDP form labels (kdp_upload.py L dict),
+     KDP Reports download (sales.py), cover calculator reading (covers.read_kdp_calculator). Each stops and asks instead of guessing.
+  4. /testdraft ocean (Phase 3 test), /sample (Phase 4), /research (Phase 5), /sales + /adsplan (Phase 6),
+     safety_check.bat + install_autostart.bat (Phase 7)
+  5. Ads stay OFF (config ads.enabled: false) until tested together.
+- Setup: user chose Option B — code lives in rhathansusheel-arch/phone_test, branch ccr-2d037c59-qktmwl; user pulls it into C:\KDPAgent.
+- Code map: main.py (start) · kdp_agent/telegram_bot.py (commands, ask_me) · jobs.py (stages, runner, timers) ·
+  pipeline.py (inbox → check → research → listing → interiors → covers → review) · pdftools.py (checker) ·
+  interior.py · covers.py · research.py (Amazon) · listing.py (+ .claude/skills/kdp-listing-seo/SKILL.md) ·
+  kdp_upload.py (drafts, publish, live updates) · artist.py (+ prompts/style_*.md) · niches.py · taste.py ·
+  sales.py · ads.py · after_launch.py (daily/weekly timers, slow sellers, backups) · specs.py (KDP numbers) ·
+  safety.py (trademarks) · safety_tests.py + safety_check.py · tests/ (python -m pytest)
 - Note: KDP changed its limits twice in autumn 2026 — recheck numbers on kdp.amazon.com before relying on them.

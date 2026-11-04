@@ -32,7 +32,7 @@ KNOWN_SUBJECT_WORDS = set("""shark whale dolphin octopus turtle jellyfish seahor
 lobster squid stingray narwhal otter walrus pufferfish clownfish mermaid submarine
 car truck bus tractor train plane airplane helicopter boat ship rocket digger excavator bulldozer
 crane firetruck ambulance motorcycle bike bicycle scooter van taxi tank dumper cement
-santa reindeer snowman elf gingerbread tree ornament stocking candle bell wreath present gift sleigh
+santa reindeer snowman elf gingerbread ornament stocking candle wreath sleigh
 dinosaur unicorn dragon cat dog horse cow pig sheep lion tiger elephant giraffe monkey bear owl""".split())
 
 PROMPT = """You are writing an Amazon KDP listing for a colouring book. Follow these rules exactly:

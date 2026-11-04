@@ -126,18 +126,25 @@ async def research(seed: str, audience_words: list[str] | None = None, letters: 
     suggestions: list[str] = []
     async with profile_session("research") as ctx:
         page = await ctx.new_page()
+        await goto(page, f"{base}/s?k={quote_plus(seed)}&i=stripbooks", f"searching Amazon for '{seed}'")
+        failures = 0
         for prefix in prefixes:
             try:
                 resp = await ctx.request.get(SUGGEST_URL.format(q=quote_plus(prefix)))
                 if resp.ok:
+                    failures = 0
                     for s in (await resp.json()).get("suggestions", []):
                         v = s.get("value", "").strip()
                         if v and v not in suggestions:
                             suggestions.append(v)
+                else:
+                    failures += 1
             except Exception as exc:
-                log.warning("Suggestion lookup failed for %r: %s", prefix, exc)
+                failures += 1
+                log.warning("Suggestion lookup failed for %r: %s", prefix, str(exc).splitlines()[0])
+            if failures >= 3:
+                raise RuntimeError("Amazon search suggestions aren't answering - I'll try again later.")
             await human_pause(0.6)
-        await goto(page, f"{base}/s?k={quote_plus(seed)}&i=stripbooks", f"searching Amazon for '{seed}'")
         results = clean_search_results(await page.evaluate(SEARCH_JS))[:top_n]
         for r in results:
             await goto(page, f"{base}/dp/{r['asin']}", f"reading a competitor book ({r['asin']})")

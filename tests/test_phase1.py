@@ -88,7 +88,10 @@ def test_only_my_chat_is_heard():
 
 def test_bot_builds():
     app = tb.build_app("123:ABC", MY_CHAT)
-    assert len(app.handlers[0]) == 12
+    commands = {c for h in app.handlers[0] for c in getattr(h, "commands", [])}
+    for c in ("status", "queue", "pause", "resume", "level", "taste", "stopads", "help", "testask",
+              "inbox", "research", "report", "adsplan", "hold", "unhold", "login", "checkspecs", "logs", "books"):
+        assert c in commands, c
 
 
 # ---------- weekly limits
@@ -140,6 +143,7 @@ async def test_runner_continues_from_saved_stage_after_crash():
     assert saved["stage"] == "drawing" and "PC switched off" in saved["error"]
 
     jobs.WORKERS.clear()             # "restart" the agent with working code
+    jobs.update_book(slug, wait_until=None)   # (after an error the agent waits 30 minutes; skip that)
 
     @jobs.stage_worker("drawing")
     async def draw(book):

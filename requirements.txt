@@ -2,3 +2,11 @@
 python-telegram-bot==22.5   # talks to your Telegram bot
 PyYAML==6.0.3               # reads config.yaml
 python-dotenv==1.2.1        # reads secrets from .env
+playwright==1.55.0          # drives the Chromium browser (KDP, Amazon research, PDF printing)
+pypdf==6.1.1                # reads and builds PDFs
+pypdfium2==4.30.0           # turns PDF pages into images for checking
+Pillow==11.3.0              # image handling
+numpy==2.3.3                # pixel maths for the page checks
+openpyxl==3.1.5             # reads KDP's Excel sales reports
+pytest==8.4.2               # runs the automatic tests
+pytest-asyncio==1.2.0       # (tests)
