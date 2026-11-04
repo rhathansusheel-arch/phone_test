@@ -1,0 +1,4 @@
+# Python packages the KDP Agent needs. Installed by setup.bat.
+python-telegram-bot==22.5   # talks to your Telegram bot
+PyYAML==6.0.3               # reads config.yaml
+python-dotenv==1.2.1        # reads secrets from .env

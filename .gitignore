@@ -1,0 +1,17 @@
+# Secrets - never upload these
+.env
+# Logged-in browser sessions - never upload these
+browser_profile/
+# Python's own files
+.venv/
+__pycache__/
+*.pyc
+# Your books, PDFs, data and logs stay on your PC only
+inbox/*
+!inbox/.gitkeep
+books/*
+!books/.gitkeep
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep

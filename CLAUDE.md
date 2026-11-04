@@ -85,5 +85,8 @@ The user may upload Christmas by hand first (seasonal timing) — **ask them**.
 
 ## Build progress
 - [x] Phase 0 — CLAUDE.md written (2026-11-04)
-- [ ] Phase 1 — not started
+- [x] Phase 1 — code written and tested in the cloud with a pretend Telegram (2026-11-04). Waiting for user to run it on the PC (README steps 1-5) and confirm /testask works.
+- [ ] Phase 2 — not started
+- Setup: user chose Option B — code is written in the cloud repo (rhathansusheel-arch/phone_test, branch ccr-2d037c59-qktmwl); user pulls it into C:\KDPAgent with `git pull` and runs it there.
+- Code map: main.py (start), kdp_agent/telegram_bot.py (commands + ask_me), kdp_agent/jobs.py (stages + runner, add workers with @stage_worker), kdp_agent/limits.py (weekly slot guard), kdp_agent/state.py, kdp_agent/decisions.py, tests/ (run: python -m pytest).
 - Note: KDP changed its limits twice in autumn 2026 — recheck numbers on kdp.amazon.com before relying on them.

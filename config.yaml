@@ -1,0 +1,41 @@
+# KDP Agent settings.
+# Lines starting with # are notes for you. The agent ignores them.
+# After changing anything here, stop and start the agent again.
+
+agent:
+  pen_name: "Rhaths"          # the author name on every book
+  start_level: 1              # 1 = you approve every niche and every publish. Change it with /level on Telegram, not here.
+  check_every_seconds: 60     # how often the agent looks for work to do
+  show_times_in: "Asia/Kolkata"  # times in messages are shown in Indian time (IST)
+
+kdp_limits:
+  # KDP lets you CREATE (save a draft) and SUBMIT (publish) only a few new books each week,
+  # separately for paperback and hardcover. Saving a draft counts as "created".
+  # Checked: 2026-11-04. KDP changed these twice this autumn - recheck on kdp.amazon.com.
+  created_per_week: 2
+  submitted_per_week: 2
+  # The weekly count resets every Sunday at 00:00 UTC, which is Sunday 5:30 AM in India.
+  reset_day: "sunday"
+  reset_time_utc: "00:00"
+
+browser:
+  # Pause this many seconds between clicks, so the agent browses like a person.
+  min_pause_seconds: 2
+  max_pause_seconds: 5
+
+ads:
+  # Ads only start after a book has earned this much profit (rupees).
+  start_after_profit_inr: 2000
+  # Spend at most this share of that book's profit on ads (0.30 = 30%).
+  max_share_of_profit: 0.30
+  # Never spend more than this per day on one book's ads (rupees). Fill in later, in Phase 6.
+  daily_cap_inr: 0
+
+money:
+  # How many rupees one US dollar is worth. Update this once a month.
+  usd_to_inr: 84.0
+
+after_launch:
+  # A book live for 30+ days with fewer sales than this is a "slow seller" (Phase 6).
+  slow_seller_days: 30
+  slow_seller_min_sales: 3
