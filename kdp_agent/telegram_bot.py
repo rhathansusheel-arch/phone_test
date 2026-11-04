@@ -92,6 +92,20 @@ async def _send_photos(paths: list[Path]) -> None:
                 f.close()
 
 
+async def send_photos(paths: list[str | Path]) -> None:
+    """Send pictures to you (no question)."""
+    if paths:
+        await _send_photos([Path(p) for p in paths])
+
+
+async def send_files(paths: list[str | Path], caption: str | None = None) -> None:
+    """Send files (PDFs etc.) to you as documents."""
+    for i, p in enumerate(paths):
+        with open(p, "rb") as f:
+            await _bot.send_document(_chat_id, f, filename=Path(p).name,
+                                     caption=caption if i == 0 else None)
+
+
 async def handle_button(qid: str, index: int) -> str:
     """You tapped a button. Returns the text to show you."""
     q = _pending.get(qid)

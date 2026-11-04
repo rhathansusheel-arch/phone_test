@@ -4,9 +4,13 @@
 
 agent:
   pen_name: "Rhaths"          # the author name on every book
+  # How the pen name is typed into KDP's author boxes. A one-word pen name goes in "last name".
+  author_first_name: ""
+  author_last_name: "Rhaths"
   start_level: 1              # 1 = you approve every niche and every publish. Change it with /level on Telegram, not here.
   check_every_seconds: 60     # how often the agent looks for work to do
   show_times_in: "Asia/Kolkata"  # times in messages are shown in Indian time (IST)
+  books_per_week: 2           # how many new books to get ready each week (KDP allows 2)
 
 kdp_limits:
   # KDP lets you CREATE (save a draft) and SUBMIT (publish) only a few new books each week,
@@ -18,24 +22,136 @@ kdp_limits:
   reset_day: "sunday"
   reset_time_utc: "00:00"
 
+# ---------------------------------------------------------------------------
+# KDP's printing rules. These numbers were collected on 2026-11-04 from guides
+# that quote KDP (kdp.amazon.com was not reachable from the build computer).
+# Before the first upload, the agent re-reads KDP's own help pages from your PC
+# (/checkspecs on Telegram) and saves the confirmed numbers in data\kdp_specs.json,
+# which then wins over this section.
+# ---------------------------------------------------------------------------
+kdp_specs:
+  checked_on: "2026-11-04"
+  verified_from_kdp: false     # becomes true after /checkspecs confirms them
+  paperback:
+    min_pages: 24
+    # Trim sizes (width x height, inches) allowed for black ink + white paper, with the most pages allowed.
+    trims:
+      "5x8": 828
+      "5.5x8.5": 828
+      "6x9": 828
+      "7x10": 828
+      "8x10": 828
+      "8.25x8.25": 800
+      "8.5x8.5": 590
+      "8.5x11": 590
+    outside_margin_no_bleed: 0.25   # inches, top/bottom/outside edge
+    # Inside (gutter) margin depends on page count: [up to this many pages, margin in inches]
+    gutter:
+      - [150, 0.375]
+      - [300, 0.5]
+      - [500, 0.625]
+      - [700, 0.75]
+      - [828, 0.875]
+    min_dpi: 300
+    min_line_pt: 0.75
+    cover_bleed: 0.125              # extra edge on every side of the cover
+    spine_per_page_white: 0.002252  # spine width = pages x this (white paper)
+    spine_text_min_pages: 80        # spine text only if the book has more than 79 pages
+    cover_safe: 0.25                # keep cover text this far from every trim edge and the spine fold
+    barcode_box: [2.0, 1.2]         # inches (w x h) kept empty at bottom-right of the back cover
+  hardcover:
+    min_pages: 75
+    max_pages: 550
+    trims: ["5.5x8.5", "6x9", "6.14x9.21", "7x10", "8.25x11"]
+    # Case-laminate cover. NOT confirmed: the agent checks KDP's cover calculator before using these.
+    cover_wrap: 0.591
+    cover_hinge: 0.394
+    spine_per_page_white: 0.002252
+    spine_extra: 0.06
+  # Printing cost on Amazon.com in US dollars, black ink, white paper.
+  # "Regular" trim = up to 6.12 x 9 in. Anything bigger is "large".
+  printing_cost_usd:
+    paperback:
+      regular: {short_max_pages: 108, short_flat: 2.30, fixed: 1.00, per_page: 0.012}
+      large:   {short_max_pages: 108, short_flat: 2.84, fixed: 1.00, per_page: 0.017}
+    hardcover:
+      regular: {short_max_pages: 108, short_flat: 6.80, fixed: 5.65, per_page: 0.012}
+      large:   {short_max_pages: 108, short_flat: 7.49, fixed: 5.65, per_page: 0.017}
+  royalty:
+    high_rate: 0.60          # royalty share when the list price is at or above the threshold
+    low_rate: 0.50           # royalty share below the threshold
+    threshold_usd: 9.99
+
+ai_disclosure:
+  # Hard rule 2: KDP's AI question is always answered honestly.
+  tool: "Claude (Anthropic)"
+  images: "Entire work, with minimal or no editing"   # the pictures were drawn by Claude
+  texts: "Some sections, with minimal or no editing"  # title, description and front-matter text written by Claude
+  translations: "None"
+
 browser:
   # Pause this many seconds between clicks, so the agent browses like a person.
   min_pause_seconds: 2
   max_pause_seconds: 5
+  show_kdp_window: true        # show the KDP browser window, so you can log in when asked
+  research_headless: true      # true = Amazon research runs without a visible window
+  kdp_base_url: "https://kdp.amazon.com/en_US"
+  amazon_base_url: "https://www.amazon.com"
+
+claude:
+  command: "claude"            # the Claude Code command on your PC
+  timeout_seconds: 600         # give up on one Claude job after this long
+
+books:
+  paper: "white"
+  cover_finish: "matte"        # matte or glossy
+  default_trim: "8.5x11"
+  # Copyright line on page 3 of every book. {year} and {pen_name} are filled in.
+  copyright_text: "Copyright © {year} {pen_name}. All rights reserved. No part of this book may be reproduced without permission from the author."
+  ai_note: "Illustrations created with the help of AI (Claude by Anthropic)."
+
+listing:
+  marketplace: "Amazon.com"
+  # Words that must never appear in titles, subtitles or keywords (KDP rules / misleading).
+  banned_words: ["best", "new", "bestseller", "best-seller", "free", "amazon", "kindle", "kdp", "#1"]
+  price_options: 2             # how many price options to show you
+
+research:
+  searches_per_day: 6          # be polite to Amazon: at most this many research searches a day
+  cache_days: 7                # reuse research for this many days
+  seasonal_lead_weeks: [6, 10] # look for holidays this many weeks ahead
+
+artist:
+  max_retries: 2               # redraw a failed page this many times before asking you
+  similarity_limit: 10         # pages closer than this (0-64) count as "too similar"
+  min_ink: 0.02                # a picture must have at least 2% black...
+  max_ink: 0.35                # ...and at most 35% black (leave room to colour)
+
+autonomy:
+  level2_after_approvals: 5    # unchanged niche approvals in a row before level 2 is offered
 
 ads:
+  enabled: false               # stays off until we test ads together (Phase 6)
   # Ads only start after a book has earned this much profit (rupees).
   start_after_profit_inr: 2000
   # Spend at most this share of that book's profit on ads (0.30 = 30%).
   max_share_of_profit: 0.30
-  # Never spend more than this per day on one book's ads (rupees). Fill in later, in Phase 6.
-  daily_cap_inr: 0
+  # Never spend more than this per day on one book's ads (rupees).
+  daily_cap_inr: 150
 
 money:
   # How many rupees one US dollar is worth. Update this once a month.
   usd_to_inr: 84.0
+  # Other currencies to rupees (used only for sales reports). Update monthly.
+  to_inr: {USD: 84.0, GBP: 110.0, EUR: 95.0, CAD: 61.0, AUD: 55.0, JPY: 0.56, INR: 1.0}
 
 after_launch:
   # A book live for 30+ days with fewer sales than this is a "slow seller" (Phase 6).
   slow_seller_days: 30
   slow_seller_min_sales: 3
+  sales_check_hour_ist: 9       # read KDP sales once a day at about this hour
+  weekly_report_hour_ist: 19    # Sunday evening report at about this hour
+  review_checks_per_day: 2      # how often to check if a book in review has gone live
+
+backups:
+  keep_days: 30
