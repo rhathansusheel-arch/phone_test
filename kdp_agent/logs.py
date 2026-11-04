@@ -41,6 +41,11 @@ class DailyFileHandler(logging.Handler):
 
 
 def setup() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")   # emoji in titles never crash the Windows console
+        except Exception:
+            pass
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     root = logging.getLogger()
     root.setLevel(logging.INFO)

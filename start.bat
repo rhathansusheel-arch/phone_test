@@ -2,6 +2,7 @@
 REM Starts the KDP Agent and restarts it if it ever crashes. Close this window to stop it.
 cd /d "%~dp0"
 title KDP Agent
+chcp 65001 >nul
 :loop
 .venv\Scripts\python main.py
 if exist stop.flag (del stop.flag & exit /b 0)

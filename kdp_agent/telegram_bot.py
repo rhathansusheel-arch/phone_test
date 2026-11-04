@@ -79,17 +79,24 @@ async def ask_me(text: str, buttons: list[str] | None = None,
 
 
 async def _send_photos(paths: list[Path]) -> None:
-    if len(paths) == 1:
-        with open(paths[0], "rb") as f:
-            await _bot.send_photo(_chat_id, f)
-        return
-    for start in range(0, len(paths), 10):  # Telegram allows 10 photos per album
-        files = [open(p, "rb") for p in paths[start:start + 10]]
-        try:
-            await _bot.send_media_group(_chat_id, [InputMediaPhoto(f) for f in files])
-        finally:
-            for f in files:
-                f.close()
+    paths = [Path(p) for p in paths if Path(p).exists()]
+    try:
+        if len(paths) == 1:
+            with open(paths[0], "rb") as f:
+                await _bot.send_photo(_chat_id, f)
+            return
+        for start in range(0, len(paths), 10):  # Telegram allows 10 photos per album
+            files = [open(p, "rb") for p in paths[start:start + 10]]
+            try:
+                await _bot.send_media_group(_chat_id, [InputMediaPhoto(f) for f in files])
+            finally:
+                for f in files:
+                    f.close()
+    except Exception as exc:    # e.g. a very tall screenshot: send the pictures as files instead
+        log.warning("Sending photos failed (%s) - sending them as files", exc)
+        for p in paths:
+            with open(p, "rb") as f:
+                await _bot.send_document(_chat_id, f, filename=p.name)
 
 
 async def send_photos(paths: list[str | Path]) -> None:

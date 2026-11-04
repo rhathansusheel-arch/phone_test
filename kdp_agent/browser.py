@@ -65,6 +65,7 @@ async def profile_session(profile: str):
     headless = (not cfg["show_kdp_window"]) if profile == "kdp" else cfg["research_headless"]
     folder = settings.BROWSER_PROFILE / profile
     folder.mkdir(parents=True, exist_ok=True)
+    _no_password_saving(folder)
     async with _one_at_a_time:
         async with async_playwright() as p:
             ctx = await p.chromium.launch_persistent_context(
@@ -75,6 +76,20 @@ async def profile_session(profile: str):
                 yield ctx
             finally:
                 await ctx.close()
+
+
+def _no_password_saving(folder: Path) -> None:
+    """Hard rule 6: switch off Chromium's 'save password?' offer, so a password is never stored."""
+    import json
+    prefs_file = folder / "Default" / "Preferences"
+    prefs_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        prefs = json.loads(prefs_file.read_text(encoding="utf-8")) if prefs_file.exists() else {}
+    except (ValueError, OSError):
+        prefs = {}
+    prefs["credentials_enable_service"] = False
+    prefs.setdefault("profile", {})["password_manager_enabled"] = False
+    prefs_file.write_text(json.dumps(prefs), encoding="utf-8")
 
 
 async def page_problem(page) -> str | None:
