@@ -284,9 +284,17 @@ async def _answer_ai(form: Form) -> bool:
         return False
     cfg = settings.load_config().get("ai_disclosure", {})
     question = form.page.get_by_text(L["ai_question"], exact=False).first
-    yes = question.locator("xpath=following::*[self::input[@type='radio']][1]")
-    labelled = form.page.get_by_role("radio", name=L["ai_yes"], exact=True)
-    target = labelled.first if await labelled.count() else yes
+    # The "Yes" radio that comes right AFTER the AI question (never another question's Yes).
+    radios = question.locator("xpath=following::input[@type='radio']")
+    target = None
+    for i in range(min(4, await radios.count())):
+        r = radios.nth(i)
+        label = await r.evaluate("e => (e.labels && e.labels[0] ? e.labels[0].innerText : e.parentElement.innerText).trim()")
+        if label.lower() == L["ai_yes"].lower():
+            target = r
+            break
+    if target is None:
+        await form.stop("I couldn't find the 'Yes' answer for the AI-generated content question")
     await target.check()
     await human_pause(0.5)
     tool = cfg.get("tool", "Claude (Anthropic)")
@@ -464,15 +472,11 @@ async def fill_format(slug: str, fmt: str) -> dict:
         await form.choose(L["all_territories"])
         await form.select(L["marketplace"], L["amazon_com"], required=False)
         price = lst["prices"][fmt]["US"]
-        row = page.get_by_text(L["amazon_com"], exact=True).first
-        price_box = row.locator("xpath=following::input[1]")
-        if not await row.count() or not await price_box.count():
-            await form.stop("I couldn't find the Amazon.com price box")
+        price_box, row = await _price_box(form)
         await price_box.fill(f"{price:.2f}")
         await price_box.press("Tab")
         await human_pause()
-        row_text = await row.locator("xpath=ancestor::*[self::tr or self::div][1]").inner_text()
-        found = re.findall(r"\$\s?(\d+\.\d\d)", row_text)
+        found = re.findall(r"\$\s?(\d+\.\d\d)", await row.inner_text())
         kdp_royalty = float(found[-1]) if found else None
         await form.shot("pricing")
         # 5. SAVE AS DRAFT ONLY
@@ -482,6 +486,16 @@ async def fill_format(slug: str, fmt: str) -> dict:
              screenshots=[str(p) for p in form.shots])
     return {"queued": False, "price": price, "kdp_royalty": kdp_royalty, "warnings": warnings,
             "screens": [str(p) for p in form.shots]}
+
+
+async def _price_box(form: Form):
+    """The Amazon.com price box and its table row."""
+    row = form.page.locator("tr").filter(has_text=re.compile(r"Amazon\.com")).first
+    if await row.count():
+        box = row.locator("input[type=text], input:not([type])").first
+        if await box.count():
+            return box, row
+    await form.stop("I couldn't find the Amazon.com price box")
 
 
 async def _wait_processing(form: Form, seconds: int = 300) -> None:
@@ -555,7 +569,7 @@ async def bookshelf_status(title: str) -> dict:
             return {}
         text = await row.first.inner_text()
         links = [await a.get_attribute("href") for a in await row.first.locator("a[href*='amazon.']").all()]
-    out = {"links": [l for l in links if l]}
+    out = {"links": list(dict.fromkeys(l for l in links if l))}
     for fmt in ("paperback", "hardcover"):
         m = re.search(fmt + r"[\s\S]{0,200}?\b(LIVE|IN REVIEW|PUBLISHING|DRAFT|BLOCKED|ACTION REQUIRED|IN PROGRESS)\b",
                       text, re.I)
@@ -609,8 +623,7 @@ async def update_live(slug: str, changes: dict) -> None:
             await form.click(L["save_continue"])
             await form.click(L["save_continue"])
             if "price" in changes and fmt in changes["price"]:
-                row = page.get_by_text(L["amazon_com"], exact=True).first
-                box = row.locator("xpath=following::input[1]")
+                box, _row = await _price_box(form)
                 await box.fill(f"{changes['price'][fmt]:.2f}")
                 await box.press("Tab")
             await form.shot("update")
@@ -684,8 +697,11 @@ async def approval_worker(book: dict) -> str | None:
     lines = [f"📋 '{lst['title']}' is saved as a DRAFT on KDP (not published)."]
     for fmt, s in kdp.items():
         p = lst["prices"][fmt]
+        shown = s.get("kdp_royalty")
+        differ = shown is not None and abs(shown - p["royalty_usd"]) > 0.05
         lines.append(f"• {fmt.title()}: ${p['US']:.2f} → royalty ${p['royalty_usd']:.2f} (my maths), "
-                     f"KDP shows {('$%.2f' % s['kdp_royalty']) if s.get('kdp_royalty') else 'n/a'}; "
+                     f"KDP shows {('$%.2f' % shown) if shown is not None else 'n/a'}"
+                     f"{' ❗ different - KDP is right, please check the price' if differ else ' ✅'}; "
                      f"AI disclosure answered Yes: {'✅' if s.get('ai_disclosed') else '❗'}")
     lines.append("\nSlots left this week:\n" + limits.summary())
     await notify("\n".join(lines))
